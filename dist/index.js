@@ -55,10 +55,22 @@ function DocxMerger(options, files) {
         Style.prepareStyles(files, this._style);
         Style.mergeStyles(files, this._style);
 
+        var sectPr;
         files.forEach(function (zip, index) {
             if (index === 0) {
                 // Use the first file as the base document
                 self._baseZip = zip;
+
+                // Extract the first sectPr from the first file
+                var xml = zip.file("word/document.xml").asText();
+                var sectPrStartIndex = xml.indexOf("<w:sectPr");
+                if (sectPrStartIndex !== -1) {
+                    var sectPrEndIndex = xml.indexOf("</w:sectPr>", sectPrStartIndex);
+                    if (sectPrEndIndex !== -1) {
+                        sectPrEndIndex += 11; // Adjust to include the length of the end tag
+                        sectPr = xml.slice(sectPrStartIndex, sectPrEndIndex);
+                    }
+                }
             } else {
                 var xml = zip.file("word/document.xml").asText();
                 xml = xml.substring(xml.indexOf("<w:body>") + 8);
@@ -66,7 +78,15 @@ function DocxMerger(options, files) {
                 xml = xml.substring(0, xml.lastIndexOf("<w:sectPr"));
 
                 self.insertRaw(xml);
-                if (self._pageBreak && index < files.length - 1) self.insertPageBreak();
+            }
+
+            // Insert a section break or page break after each file
+            if (self._pageBreak && index < files.length - 1) {
+                if (sectPr) {
+                    self.insertRaw('<w:p><w:pPr>' + sectPr + '</w:pPr></w:p>');
+                } else {
+                    self.insertPageBreak();
+                }
             }
         });
     };
