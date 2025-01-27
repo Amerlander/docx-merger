@@ -11,37 +11,56 @@ module.exports = {
     extractHeadersFooters: function (zip, sectPr) {
         var headerFooterRefs = [];
     
-        // Parse the XML to extract <w:hdrReference> and <w:ftrReference> from document.xml
+        // Parse the document.xml to find the section properties (<w:sectPr>) correctly
         var xmlString = zip.file("word/document.xml").asText();
         var xmlDoc = new DOMParser().parseFromString(xmlString, 'text/xml');
     
-        // Look for header and footer references inside <w:sectPr>
+        // Find the position of <w:sectPr> in the XML (start and end)
         var sectPrStartIndex = xmlString.indexOf('<w:sectPr');
-        if (sectPrStartIndex !== -1) {
-            var sectPrXML = xmlString.slice(sectPrStartIndex, xmlString.indexOf('</w:sectPr>') + 11);
-            var sectDoc = new DOMParser().parseFromString(sectPrXML, 'text/xml');
+        if (sectPrStartIndex === -1) {
+            console.error("Section properties <w:sectPr> not found in document.xml");
+            return headerFooterRefs; // Early return if not found
+        }
+        var sectPrEndIndex = xmlString.indexOf('</w:sectPr>', sectPrStartIndex) + 11;
+        
+        if (sectPrEndIndex === -1) {
+            console.error("End of section properties </w:sectPr> not found");
+            return headerFooterRefs; // Early return if not found
+        }
     
-            // Extract header reference
-            var headerRef = sectDoc.getElementsByTagName('w:hdrReference');
-            if (headerRef.length > 0) {
-                headerFooterRefs.push({
-                    type: 'headerReference',
-                    xml: headerRef[0].outerHTML
-                });
-            }
+        var sectPrXML = xmlString.slice(sectPrStartIndex, sectPrEndIndex);
     
-            // Extract footer reference
-            var footerRef = sectDoc.getElementsByTagName('w:ftrReference');
-            if (footerRef.length > 0) {
-                headerFooterRefs.push({
-                    type: 'footerReference',
-                    xml: footerRef[0].outerHTML
-                });
-            }
+        // Parse the section properties XML to find header/footer references
+        var sectDoc = new DOMParser().parseFromString(sectPrXML, 'text/xml');
+    
+        // Debugging: Output the section properties XML to check the structure
+        console.log("sectPrXML:", sectPrXML);
+    
+        // Find the header reference (<w:hdrReference>)
+        var headerRef = sectDoc.getElementsByTagName('w:hdrReference');
+        if (headerRef.length > 0) {
+            // Log header reference if found
+            console.log("Header Reference Found:", headerRef[0].outerHTML);
+            headerFooterRefs.push({
+                type: 'headerReference',
+                xml: headerRef[0].outerHTML
+            });
+        }
+    
+        // Find the footer reference (<w:ftrReference>)
+        var footerRef = sectDoc.getElementsByTagName('w:ftrReference');
+        if (footerRef.length > 0) {
+            // Log footer reference if found
+            console.log("Footer Reference Found:", footerRef[0].outerHTML);
+            headerFooterRefs.push({
+                type: 'footerReference',
+                xml: footerRef[0].outerHTML
+            });
         }
     
         return headerFooterRefs;
     },
+    
     
 
     /**
