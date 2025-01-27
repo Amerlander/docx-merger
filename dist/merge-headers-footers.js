@@ -10,35 +10,37 @@ module.exports = {
      */
     extractHeadersFooters: function (zip, sectPr) {
         var headerFooterRefs = [];
-        var doc = new DOMParser().parseFromString(sectPr, 'text/xml');
 
-        // Extract header references
-        var headerRefs = doc.getElementsByTagName('w:headerReference');
-        for (var i = 0; i < headerRefs.length; i++) {
-            var refId = headerRefs[i].getAttribute('r:id');
-            var headerFile = zip.file(`word/${refId}.xml`);
-            if (headerFile) {
+        // Parse the XML to extract <w:hdrReference> and <w:ftrReference> from document.xml
+        var xmlString = zip.file("word/document.xml").asText();
+        var xmlDoc = new DOMParser().parseFromString(xmlString, 'text/xml');
+
+        // Look for header and footer references inside <w:sectPr>
+        var sectPrStartIndex = xmlString.indexOf('<w:sectPr');
+        if (sectPrStartIndex !== -1) {
+            var sectPrXML = xmlString.slice(sectPrStartIndex, xmlString.indexOf('</w:sectPr>') + 11);
+            var sectDoc = new DOMParser().parseFromString(sectPrXML, 'text/xml');
+
+            // Extract header reference
+            var headerRef = sectDoc.getElementsByTagName('w:hdrReference');
+            if (headerRef.length > 0) {
                 headerFooterRefs.push({
                     type: 'headerReference',
-                    xml: headerFile.asText()
+                    xml: headerRef[0].outerHTML
                 });
             }
-        }
 
-        // Extract footer references
-        var footerRefs = doc.getElementsByTagName('w:footerReference');
-        for (var i = 0; i < footerRefs.length; i++) {
-            var refId = footerRefs[i].getAttribute('r:id');
-            var footerFile = zip.file(`word/${refId}.xml`);
-            if (footerFile) {
+            // Extract footer reference
+            var footerRef = sectDoc.getElementsByTagName('w:ftrReference');
+            if (footerRef.length > 0) {
                 headerFooterRefs.push({
                     type: 'footerReference',
-                    xml: footerFile.asText()
+                    xml: footerRef[0].outerHTML
                 });
             }
         }
 
-        return headerFooterRefs || [];
+        return headerFooterRefs;
     },
 
     /**
