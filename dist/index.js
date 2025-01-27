@@ -97,14 +97,17 @@ function DocxMerger(options, files) {
 
         xml = xml.replace(xml.slice(startIndex, endIndex), this._body.join(''));
 
-        RelContentType.generateContentTypes(zip, this._contentTypes, this._header, this._footer);
+        // Ensure the content types and relations are correctly updated for the final document
+        RelContentType.generateContentTypes(zip, this._contentTypes);
         Media.copyMediaFiles(zip, this._media, this._files);
-        RelContentType.generateRelations(zip, this._rel, this._header, this._footer);
-        bulletsNumbering.generateNumbering(zip, this._numbering);
-        Style.generateStyles(zip, this._style);
+        RelContentType.generateRelations(zip, this._rel);
 
+        // Generate headers and footers after content merging
         headersFooters.generateHeaders(zip, this._header);
         headersFooters.generateFooters(zip, this._footer);
+
+        bulletsNumbering.generateNumbering(zip, this._numbering);
+        Style.generateStyles(zip, this._style);
 
         zip.file("word/document.xml", xml);
 
