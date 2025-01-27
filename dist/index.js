@@ -29,19 +29,12 @@ function DocxMerger(options, files) {
     this._builder = this._body;
 
     this.insertPageBreak = function () {
-        // var pb = '<w:p> \
-        // 			<w:r> \
-        // 				<w:br w:type="page"/> \
-        // 			</w:r> \
-        // 		  </w:p>';
-        const sectionBreak = '<w:p> \
-                  <w:pPr> \
-                      <w:sectPr> \
-                          <w:type w:val="nextPage"/> \
-                      </w:sectPr> \
-                  </w:pPr> \
-              </w:p>';
-        this._builder.push(sectionBreak);
+        var pb = '<w:p> \
+					<w:r> \
+						<w:br w:type="page"/> \
+					</w:r> \
+				  </w:p>';
+        this._builder.push(pb);
     };
 
     this.insertRaw = function (xml) {
@@ -50,7 +43,6 @@ function DocxMerger(options, files) {
     };
 
     this.mergeBody = function (files) {
-
         var self = this;
         this._builder = this._body;
 
@@ -65,14 +57,28 @@ function DocxMerger(options, files) {
         Style.mergeStyles(files, this._style);
 
         files.forEach(function (zip, index) {
-            //var zip = new JSZip(file);
+            // Extract the document XML
             var xml = zip.file("word/document.xml").asText();
-            xml = xml.substring(xml.indexOf("<w:body>") + 8);
-            xml = xml.substring(0, xml.indexOf("</w:body>"));
-            xml = xml.substring(0, xml.lastIndexOf("<w:sectPr"));
 
-            self.insertRaw(xml);
-            if (self._pageBreak && index < files.length - 1) self.insertPageBreak();
+            // Extract <w:body> content
+            var bodyStartIndex = xml.indexOf("<w:body>") + 8;
+            var bodyEndIndex = xml.lastIndexOf("<w:sectPr");
+
+            // Extract the section properties (<w:sectPr>)
+            var sectPrStartIndex = xml.lastIndexOf("<w:sectPr");
+            var sectPrEndIndex = xml.indexOf("</w:sectPr>", sectPrStartIndex) + 11;
+            var sectPr = xml.slice(sectPrStartIndex, sectPrEndIndex);
+
+            // Extract content inside <w:body> excluding <w:sectPr>
+            var content = xml.slice(bodyStartIndex, bodyEndIndex);
+
+            // Append content to the builder
+            self.insertRaw(content);
+
+            // Append the section properties for this section
+            if (self._pageBreak && index < files.length - 1) {
+                self.insertRaw(`<w:p><w:pPr>${sectPr}</w:pPr></w:p>`);
+            }
         });
     };
 
