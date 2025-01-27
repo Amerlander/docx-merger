@@ -44,7 +44,6 @@ function DocxMerger(options, files) {
     };
 
     this.mergeBody = function (files) {
-
         var self = this;
         this._builder = this._body;
 
@@ -59,7 +58,18 @@ function DocxMerger(options, files) {
         Style.mergeStyles(files, this._style);
 
         files.forEach(function (zip, index) {
-            //var zip = new JSZip(file);
+            if (index === 0) {
+                // Extract all headers and footers from the first file
+                self._headers = [];
+                self._footers = [];
+                zip.file(/word\/header\d+\.xml/).forEach(function (headerFile) {
+                    self._headers.push({ name: headerFile.name, content: headerFile.asText() });
+                });
+                zip.file(/word\/footer\d+\.xml/).forEach(function (footerFile) {
+                    self._footers.push({ name: footerFile.name, content: footerFile.asText() });
+                });
+            }
+
             var xml = zip.file("word/document.xml").asText();
             xml = xml.substring(xml.indexOf("<w:body>") + 8);
             xml = xml.substring(0, xml.indexOf("</w:body>"));
@@ -71,7 +81,6 @@ function DocxMerger(options, files) {
     };
 
     this.save = function (type, callback) {
-
         var zip = this._files[0];
 
         var xml = zip.file("word/document.xml").asText();
@@ -79,6 +88,14 @@ function DocxMerger(options, files) {
         var endIndex = xml.lastIndexOf("<w:sectPr");
 
         xml = xml.replace(xml.slice(startIndex, endIndex), this._body.join(''));
+
+        // Replace all headers and footers in the final document
+        self._headers.forEach(function (header) {
+            zip.file(header.name, header.content);
+        });
+        self._footers.forEach(function (footer) {
+            zip.file(footer.name, footer.content);
+        });
 
         RelContentType.generateContentTypes(zip, this._contentTypes);
         Media.copyMediaFiles(zip, this._media, this._files);
