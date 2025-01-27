@@ -9,7 +9,6 @@ var bulletsNumbering = require('./merge-bullets-numberings');
 var headersFooters = require('./merge-headers-footers');
 
 function DocxMerger(options, files) {
-
     this._body = [];
     this._header = [];
     this._footer = [];
@@ -69,7 +68,7 @@ function DocxMerger(options, files) {
             var xml = zip.file("word/document.xml").asText();
 
             var bodyStartIndex = xml.indexOf("<w:body>") + 8;
-            var bodyEndIndex = xml.lastIndexOf("<w:sectPr");
+            var bodyEndIndex = xml.lastIndexOf("<w:sectPr>");
 
             var sectPrStartIndex = xml.lastIndexOf("<w:sectPr");
             var sectPrEndIndex = xml.indexOf("</w:sectPr>", sectPrStartIndex) + 11;
@@ -82,7 +81,6 @@ function DocxMerger(options, files) {
             console.log("headerFooterRefs", headerFooterRefs); // Debugging line
 
             self.insertHeadersAndFooters(headerFooterRefs);
-
             self.insertRaw(content);
 
             if (self._pageBreak && index < files.length - 1) {
@@ -104,14 +102,14 @@ function DocxMerger(options, files) {
 
         self.insertHeadersAndFooters(headerFooterRefs); // Add references to this array
 
+        // Ensure headers and footers are generated properly
+        headersFooters.generateHeaders(zip, this._header);
+        headersFooters.generateFooters(zip, this._footer);
+
         // Pass headerFooterRefs to generateContentTypes and generateRelations
         RelContentType.generateContentTypes(zip, this._contentTypes, headerFooterRefs);
         Media.copyMediaFiles(zip, this._media, this._files);
         RelContentType.generateRelations(zip, this._rel, headerFooterRefs);
-
-        // Generate headers and footers after content merging
-        headersFooters.generateHeaders(zip, this._header);
-        headersFooters.generateFooters(zip, this._footer);
 
         bulletsNumbering.generateNumbering(zip, this._numbering);
         Style.generateStyles(zip, this._style);
