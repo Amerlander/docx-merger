@@ -10,8 +10,6 @@ var bulletsNumbering = require('./merge-bullets-numberings');
 function DocxMerger(options, files) {
 
     this._body = [];
-    this._header = [];
-    this._footer = [];
     this._Basestyle = options.style || 'source';
     this._style = [];
     this._numbering = [];
@@ -81,14 +79,6 @@ function DocxMerger(options, files) {
         var endIndex = xml.lastIndexOf("<w:sectPr");
 
         xml = xml.replace(xml.slice(startIndex, endIndex), this._body.join(''));
-
-        // Replace all headers and footers in the final document
-        self._headers.forEach(function (header) {
-            zip.file(header.name, header.content);
-        });
-        self._footers.forEach(function (footer) {
-            zip.file(footer.name, footer.content);
-        });
 
         RelContentType.generateContentTypes(zip, this._contentTypes);
         Media.copyMediaFiles(zip, this._media, this._files);
