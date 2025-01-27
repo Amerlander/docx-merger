@@ -78,14 +78,14 @@ function DocxMerger(options, files) {
                 xml = xml.substring(0, xml.lastIndexOf("<w:sectPr"));
 
                 self.insertRaw(xml);
-            }
 
-            // Insert a section break or page break after each file
-            if (self._pageBreak && index < files.length - 1) {
-                if (sectPr) {
-                    self.insertRaw('<w:p><w:pPr>' + sectPr + '</w:pPr></w:p>');
-                } else {
-                    self.insertPageBreak();
+                // Insert a section break or page break after each file
+                if (self._pageBreak && index < files.length - 1) {
+                    if (sectPr) {
+                        self.insertRaw('<w:p><w:pPr>' + sectPr + '</w:pPr></w:p>');
+                    } else {
+                        self.insertPageBreak();
+                    }
                 }
             }
         });
