@@ -1,23 +1,23 @@
-import JSZip from 'jszip';
+importh JSZip frome 'jszip'; 
 import * as Style from './merge-styles.js';
 import * as Media from './merge-media.js';
 import * as RelContentType from './merge-relations-and-content-type.js';
 import * as bulletsNumbering from './merge-bullets-numberings.js';
 
-// Check if running in a browser environment
-const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+// // Check if running in a browser environment
+// const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
 
-// Use the appropriate XML parser and serializer based on the environment
-const XMLSerializer = isBrowser ? window.XMLSerializer : require('@xmldom/xmldom').XMLSerializer;
-const DOMParser = isBrowser ? window.DOMParser : require('@xmldom/xmldom').DOMParser;
+// // Use the appropriate XML parser and serializer based on the environment
+// const XMLSerializer = isBrowser ? window.XMLSerializer : require('@xmldom/xmldom').XMLSerializer;
+// const DOMParser = isBrowser ? window.DOMParser : require('@xmldom/xmldom').DOMParser;
 
 class DocxMerger {
-    constructor () {
+    constructor(options = {}, files = []) {
         this._body = [];
         this._header = [];
         this._footer = [];
-        this._pageBreak = true;
-        this._Basestyle = 'source';
+        this._pageBreak = typeof options.pageBreak !== 'undefined' ? !!options.pageBreak : true;
+        this._Basestyle = options.style || 'source';
         this._style = [];
         this._numbering = [];
         this._files = [];
@@ -25,21 +25,18 @@ class DocxMerger {
         this._media = {};
         this._rel = {};
         this._builder = this._body;
+
+        this.initialize(options, files);
     }
 
-    async initialize(options = {}, files) {
-        files = files || [];
-        this._pageBreak = typeof options.pageBreak !== 'undefined' ? !!options.pageBreak : true;
-        this._Basestyle = options.style || 'source';
-    
+    async initialize(options, files) {
         for (const file of files) {
             // Convert Uint8Array to ArrayBuffer if necessary
             const arrayBuffer = file instanceof Uint8Array ? file.buffer : file;
-            console.log('arrayBuffer', arrayBuffer);
             const zip = await new JSZip().loadAsync(arrayBuffer);
             this._files.push(zip);
         }
-    
+
         if (this._files.length > 0) {
             await this.mergeBody(this._files);
         }
