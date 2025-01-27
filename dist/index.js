@@ -6,6 +6,7 @@ var Style = require('./merge-styles');
 var Media = require('./merge-media');
 var RelContentType = require('./merge-relations-and-content-type');
 var bulletsNumbering = require('./merge-bullets-numberings');
+var headersFooters = require('./merge-headers-footers');
 
 function DocxMerger(options, files) {
 
@@ -42,6 +43,17 @@ function DocxMerger(options, files) {
         this._builder.push(xml);
     };
 
+    this.insertHeadersAndFooters = function (headerFooterRefs) {
+        headerFooterRefs.forEach(ref => {
+            // Insert the header/footer XML into the appropriate place
+            if (ref.type === "headerReference") {
+                this._header.push(ref.xml);
+            } else if (ref.type === "footerReference") {
+                this._footer.push(ref.xml);
+            }
+        });
+    };
+
     this.mergeBody = function (files) {
         var self = this;
         this._builder = this._body;
@@ -57,20 +69,24 @@ function DocxMerger(options, files) {
         Style.mergeStyles(files, this._style);
 
         files.forEach(function (zip, index) {
-            // Extract the document XML
+            // Extract document XML
             var xml = zip.file("word/document.xml").asText();
 
             // Extract <w:body> content
             var bodyStartIndex = xml.indexOf("<w:body>") + 8;
             var bodyEndIndex = xml.lastIndexOf("<w:sectPr");
 
-            // Extract the section properties (<w:sectPr>)
+            // Extract section properties (<w:sectPr>)
             var sectPrStartIndex = xml.lastIndexOf("<w:sectPr");
             var sectPrEndIndex = xml.indexOf("</w:sectPr>", sectPrStartIndex) + 11;
             var sectPr = xml.slice(sectPrStartIndex, sectPrEndIndex);
 
             // Extract content inside <w:body> excluding <w:sectPr>
             var content = xml.slice(bodyStartIndex, bodyEndIndex);
+
+            // Merge headers and footers
+            var headerFooterRefs = headersFooters.extractHeadersFooters(zip, sectPr);
+            self.insertHeadersAndFooters(headerFooterRefs);
 
             // Append content to the builder
             self.insertRaw(content);
@@ -83,7 +99,6 @@ function DocxMerger(options, files) {
     };
 
     this.save = function (type, callback) {
-
         var zip = this._files[0];
 
         var xml = zip.file("word/document.xml").asText();
@@ -97,6 +112,10 @@ function DocxMerger(options, files) {
         RelContentType.generateRelations(zip, this._rel);
         bulletsNumbering.generateNumbering(zip, this._numbering);
         Style.generateStyles(zip, this._style);
+
+        // Generate header and footer files
+        headersFooters.generateHeaders(zip, this._header);
+        headersFooters.generateFooters(zip, this._footer);
 
         zip.file("word/document.xml", xml);
 
