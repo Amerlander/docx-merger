@@ -36,8 +36,8 @@ module.exports = {
         // Debugging: Output the section properties XML to check the structure
         console.log("sectPrXML:", sectPrXML);
     
-        // Find the header reference (<w:hdrReference>)
-        var headerRef = sectDoc.getElementsByTagName('w:hdrReference');
+        // Find the header reference (<w:headerReference>)
+        var headerRef = sectDoc.getElementsByTagName('w:headerReference');
         if (headerRef.length > 0) {
             // Log header reference if found
             console.log("Header Reference Found:", headerRef[0].outerHTML);
@@ -47,8 +47,8 @@ module.exports = {
             });
         }
     
-        // Find the footer reference (<w:ftrReference>)
-        var footerRef = sectDoc.getElementsByTagName('w:ftrReference');
+        // Find the footer reference (<w:footerReference>)
+        var footerRef = sectDoc.getElementsByTagName('w:footerReference');
         if (footerRef.length > 0) {
             // Log footer reference if found
             console.log("Footer Reference Found:", footerRef[0].outerHTML);
