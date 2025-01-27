@@ -63,7 +63,7 @@ function DocxMerger(options, files) {
 
                 // Extract the first sectPr from the first file
                 var xml = zip.file("word/document.xml").asText();
-                var sectPrStartIndex = xml.indexOf("<w:sectPr");
+                var sectPrStartIndex = xml.lastIndexOf("<w:sectPr");
                 if (sectPrStartIndex !== -1) {
                     var sectPrEndIndex = xml.indexOf("</w:sectPr>", sectPrStartIndex);
                     if (sectPrEndIndex !== -1) {
