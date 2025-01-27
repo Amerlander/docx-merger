@@ -1,8 +1,8 @@
-const JSZip = require('jszip');
-const Style = require('./merge-styles');
-const Media = require('./merge-media');
-const RelContentType = require('./merge-relations-and-content-type');
-const bulletsNumbering = require('./merge-bullets-numberings');
+import JSZip from 'jszip';
+import Style from './merge-styles';
+import Media from './merge-media';
+import RelContentType from './merge-relations-and-content-type';
+import bulletsNumbering from './merge-bullets-numberings';
 
 class DocxMerger {
     constructor () {
