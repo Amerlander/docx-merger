@@ -59,30 +59,23 @@ function DocxMerger(options, files) {
     
         files.forEach(function(zip, index) {
             if (index === 0) {
-                // Extract all headers and footers from the first file
-                self._headers = [];
-                self._footers = [];
-                zip.file(/word\/header\d+\.xml/).forEach(function(headerFile) {
-                    self._headers.push({ name: headerFile.name, content: headerFile.asText() });
-                });
-                zip.file(/word\/footer\d+\.xml/).forEach(function(footerFile) {
-                    self._footers.push({ name: footerFile.name, content: footerFile.asText() });
-                });
+                // Use the first file as the base document
+                self._baseZip = zip;
+            } else {
+                var xml = zip.file("word/document.xml").asText();
+                xml = xml.substring(xml.indexOf("<w:body>") + 8);
+                xml = xml.substring(0, xml.indexOf("</w:body>"));
+                xml = xml.substring(0, xml.lastIndexOf("<w:sectPr"));
+    
+                self.insertRaw(xml);
+                if (self._pageBreak && index < files.length - 1)
+                    self.insertPageBreak();
             }
-    
-            var xml = zip.file("word/document.xml").asText();
-            xml = xml.substring(xml.indexOf("<w:body>") + 8);
-            xml = xml.substring(0, xml.indexOf("</w:body>"));
-            xml = xml.substring(0, xml.lastIndexOf("<w:sectPr"));
-    
-            self.insertRaw(xml);
-            if (self._pageBreak && index < files.length - 1)
-                self.insertPageBreak();
         });
     };
 
     this.save = function(type, callback) {
-        var zip = this._files[0];
+        var zip = this._baseZip;
     
         var xml = zip.file("word/document.xml").asText();
         var startIndex = xml.indexOf("<w:body>") + 8;
