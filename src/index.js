@@ -89,7 +89,7 @@ class DocxMerger {
         return Promise.all(merge).then(() => {});
     }
 
-    async save(type) {
+    async save(type, callback) {
         const zip = this._files[0];
         
         if (!zip || !zip.file) {
@@ -111,13 +111,19 @@ class DocxMerger {
     
         zip.file('word/document.xml', xmlString);
     
-        return await zip.generateAsync({
+        const generatedFile = await zip.generateAsync({
             type: type,
             compression: 'DEFLATE',
             compressionOptions: {
                 level: 4
             }
         });
+
+        if (callback) {
+            callback(generatedFile);
+        }
+
+        return generatedFile;
     }
 }
 
