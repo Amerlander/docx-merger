@@ -15,53 +15,48 @@ module.exports = {
         var xmlString = zip.file("word/document.xml").asText();
         var xmlDoc = new DOMParser().parseFromString(xmlString, 'text/xml');
     
-        // Find the position of <w:sectPr> in the XML (start and end)
+        // Find the section properties
         var sectPrStartIndex = xmlString.indexOf('<w:sectPr');
         if (sectPrStartIndex === -1) {
             console.error("Section properties <w:sectPr> not found in document.xml");
-            return headerFooterRefs; // Early return if not found
+            return headerFooterRefs;
         }
         var sectPrEndIndex = xmlString.indexOf('</w:sectPr>', sectPrStartIndex) + 11;
-        
-        if (sectPrEndIndex === -1) {
-            console.error("End of section properties </w:sectPr> not found");
-            return headerFooterRefs; // Early return if not found
-        }
     
         var sectPrXML = xmlString.slice(sectPrStartIndex, sectPrEndIndex);
     
         // Parse the section properties XML to find header/footer references
         var sectDoc = new DOMParser().parseFromString(sectPrXML, 'text/xml');
     
-        // Debugging: Output the section properties XML to check the structure
-        console.log("sectPrXML:", sectPrXML, sectDoc);
+        console.log("sectPrXML:", sectPrXML);
     
         // Find the header reference (<w:headerReference>)
         var headerRef = sectDoc.getElementsByTagName('w:headerReference');
         if (headerRef.length > 0) {
-            // Log header reference if found
-            console.log("Header Reference Found:", headerRef[0].outerHTML);
+            // Log the actual header element and its attributes
+            console.log("Header Reference Found:", headerRef[0]);
             headerFooterRefs.push({
                 type: 'headerReference',
-                xml: headerRef[0].outerHTML
+                xml: new XMLSerializer().serializeToString(headerRef[0]) // Serialize the XML correctly
             });
         }
     
         // Find the footer reference (<w:footerReference>)
         var footerRef = sectDoc.getElementsByTagName('w:footerReference');
         if (footerRef.length > 0) {
-            // Log footer reference if found
-            console.log("Footer Reference Found:", footerRef[0].outerHTML);
+            // Log the actual footer element and its attributes
+            console.log("Footer Reference Found:", footerRef[0]);
             headerFooterRefs.push({
                 type: 'footerReference',
-                xml: footerRef[0].outerHTML
+                xml: new XMLSerializer().serializeToString(footerRef[0]) // Serialize the XML correctly
             });
         }
-
-        console.log('REFS', headerFooterRefs)
+    
+        console.log('headerFooterRefs:', headerFooterRefs); // Verify the references
     
         return headerFooterRefs;
     },
+    
     
     
 
