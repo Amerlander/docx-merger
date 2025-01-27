@@ -1,8 +1,8 @@
 import JSZip from 'jszip';
-import Style from './merge-styles';
-import Media from './merge-media';
-import RelContentType from './merge-relations-and-content-type';
-import bulletsNumbering from './merge-bullets-numberings';
+import Style from './merge-styles.js';
+import Media from './merge-media.js';
+import RelContentType from './merge-relations-and-content-type.js';
+import bulletsNumbering from './merge-bullets-numberings.js';
 
 class DocxMerger {
     constructor () {
@@ -20,14 +20,13 @@ class DocxMerger {
         this._builder = this._body;
     }
 
-    async initialize(options, files) {
+    async initialize(options = {}, files) {
         files = files || [];
         this._pageBreak = typeof options.pageBreak !== 'undefined' ? !!options.pageBreak : true;
         this._Basestyle = options.style || 'source';
     
-        // Ensure files are of type Blob or File (from file input or FileReader)
         for (const file of files) {
-            const zip = await new JSZip().loadAsync(file);  // Load the file as Blob or File
+            const zip = await new JSZip().loadAsync(file);
             this._files.push(zip);
         }
     
@@ -36,48 +35,39 @@ class DocxMerger {
         }
     }
 
-    insertPageBreak = function() {
+    insertPageBreak() {
         const pb = '<w:p> \
-					<w:r> \
-						<w:br w:type="page"/> \
-					</w:r> \
-				</w:p>';
-
+                    <w:r> \
+                        <w:br w:type="page"/> \
+                    </w:r> \
+                </w:p>';
         this._builder.push(pb);
-    };
+    }
 
-    insertRaw = function(xml) {
+    insertRaw(xml) {
         this._builder.push(xml);
-    };
+    }
 
-    /**
-     * @param {Buffer[]} files 
-     * @returns {Promise<void>}
-     */
     async mergeBody(files) {
         this._builder = this._body;
-
         await RelContentType.mergeContentTypes(files, this._contentTypes);
         await Media.prepareMediaFiles(files, this._media);
         await RelContentType.mergeRelations(files, this._rel);
-
         await bulletsNumbering.prepareNumbering(files);
         await bulletsNumbering.mergeNumbering(files, this._numbering);
         await Style.prepareStyles(files, this._style);
         await Style.mergeStyles(files, this._style);
-
         const merge = files.map(async(zip, index) => {
             let xmlString = await zip.file('word/document.xml').async('string');
             xmlString = xmlString.substring(xmlString.indexOf('<w:body>') + 8);
             xmlString = xmlString.substring(0, xmlString.indexOf('</w:body>'));
             xmlString = xmlString.substring(0, xmlString.lastIndexOf('<w:sectPr'));
-
             this.insertRaw(xmlString);
             if (this._pageBreak && index < files.length-1)
                 this.insertPageBreak();
         });
         return Promise.all(merge).then(() => {});
-    };
+    }
 
     async save(type) {
         const zip = this._files[0];
@@ -108,8 +98,7 @@ class DocxMerger {
                 level: 4
             }
         });
-    };
-    
+    }
 }
 
-module.exports = DocxMerger;
+export default DocxMerger;
