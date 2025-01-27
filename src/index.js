@@ -1,8 +1,8 @@
 import JSZip from 'jszip';
-import Style from './merge-styles.js';
-import Media from './merge-media.js';
-import RelContentType from './merge-relations-and-content-type.js';
-import bulletsNumbering from './merge-bullets-numberings.js';
+import * as Style from './merge-styles.js';
+import * as Media from './merge-media.js';
+import * as RelContentType from './merge-relations-and-content-type.js';
+import * as bulletsNumbering from './merge-bullets-numberings.js';
 
 // Check if running in a browser environment
 const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
@@ -71,7 +71,7 @@ class DocxMerger {
         await RelContentType.mergeContentTypes(files, this._contentTypes);
         await Media.prepareMediaFiles(files, this._media);
         await RelContentType.mergeRelations(files, this._rel);
-        await bulletsNumbering.prepareNumbering(files);
+        await bulletsNumbering.prepareNumbering(files, this._numbering);
         await bulletsNumbering.mergeNumbering(files, this._numbering);
         await Style.prepareStyles(files, this._style);
         await Style.mergeStyles(files, this._style);

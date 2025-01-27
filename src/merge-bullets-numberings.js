@@ -1,3 +1,4 @@
+import JSZip from 'jszip';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 
 async function prepareNumbering(files, _numbering) {
