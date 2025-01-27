@@ -33,7 +33,9 @@ class DocxMerger {
         this._Basestyle = options.style || 'source';
     
         for (const file of files) {
-            const zip = await new JSZip().loadAsync(file);
+            // Convert Uint8Array to ArrayBuffer if necessary
+            const arrayBuffer = file instanceof Uint8Array ? file.buffer : file;
+            const zip = await new JSZip().loadAsync(arrayBuffer);
             this._files.push(zip);
         }
     
