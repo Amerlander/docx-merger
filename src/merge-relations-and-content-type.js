@@ -37,90 +37,69 @@ var mergeRelations = function (files, _rel) {
     });
 };
 
-var generateContentTypes = function (zip, _contentTypes, headers, footers) {
+var generateContentTypes = function(zip, _contentTypes, _headerFooterRelationships) {
     var xmlString = zip.file("[Content_Types].xml").asText();
-    var xml = new DOMParser().parseFromString(xmlString, "text/xml");
+    var xml = new DOMParser().parseFromString(xmlString, 'text/xml');
     var serializer = new XMLSerializer();
 
     var types = xml.documentElement.cloneNode();
 
-    // Add merged content types
+    // Add the ContentType for headers and footers if any
+    _headerFooterRelationships.forEach(function(rel) {
+        var contentTypeNode = xml.createElement('Default');
+        contentTypeNode.setAttribute('Extension', 'xml');
+        contentTypeNode.setAttribute('ContentType', 'application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml');
+        types.appendChild(contentTypeNode);
+
+        contentTypeNode = xml.createElement('Default');
+        contentTypeNode.setAttribute('Extension', 'xml');
+        contentTypeNode.setAttribute('ContentType', 'application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml');
+        types.appendChild(contentTypeNode);
+    });
+
+    // Add all other content types
     for (var node in _contentTypes) {
         types.appendChild(_contentTypes[node]);
     }
 
-    // Add header content types
-    headers.forEach((_, index) => {
-        const override = xml.createElement("Override");
-        override.setAttribute("PartName", `/word/header${index + 1}.xml`);
-        override.setAttribute(
-            "ContentType",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.header+xml"
-        );
-        types.appendChild(override);
-    });
-
-    // Add footer content types
-    footers.forEach((_, index) => {
-        const override = xml.createElement("Override");
-        override.setAttribute("PartName", `/word/footer${index + 1}.xml`);
-        override.setAttribute(
-            "ContentType",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"
-        );
-        types.appendChild(override);
-    });
-
     var startIndex = xmlString.indexOf("<Types");
-    xmlString = xmlString.replace(
-        xmlString.slice(startIndex),
-        serializer.serializeToString(types)
-    );
+    xmlString = xmlString.replace(xmlString.slice(startIndex), serializer.serializeToString(types));
 
     zip.file("[Content_Types].xml", xmlString);
 };
 
-var generateRelations = function (zip, _rel, headers, footers) {
+var generateRelations = function(zip, _rel, _headerFooterRefs) {
     var xmlString = zip.file("word/_rels/document.xml.rels").asText();
-    var xml = new DOMParser().parseFromString(xmlString, "text/xml");
+    var xml = new DOMParser().parseFromString(xmlString, 'text/xml');
     var serializer = new XMLSerializer();
 
-    var relationships = xml.documentElement.cloneNode();
+    var types = xml.documentElement.cloneNode();
 
-    // Add merged relationships
+    // Add relationships for headers and footers if any
+    _headerFooterRefs.forEach(function(ref) {
+        if (ref.type === "headerReference") {
+            var relNode = xml.createElement('Relationship');
+            relNode.setAttribute('Id', ref.xml);
+            relNode.setAttribute('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header');
+            relNode.setAttribute('Target', 'headers/' + ref.xml); // Assuming the header XML is located in the headers folder
+            types.appendChild(relNode);
+        }
+        if (ref.type === "footerReference") {
+            var relNode = xml.createElement('Relationship');
+            relNode.setAttribute('Id', ref.xml);
+            relNode.setAttribute('Type', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer');
+            relNode.setAttribute('Target', 'footers/' + ref.xml); // Assuming the footer XML is located in the footers folder
+            types.appendChild(relNode);
+        }
+    });
+
+    // Add all other relationships
     for (var node in _rel) {
-        relationships.appendChild(_rel[node]);
+        types.appendChild(_rel[node]);
     }
 
-    // Add header relationships
-    headers.forEach((_, index) => {
-        const relationship = xml.createElement("Relationship");
-        relationship.setAttribute("Id", `rIdHeader${index + 1}`);
-        relationship.setAttribute(
-            "Type",
-            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"
-        );
-        relationship.setAttribute("Target", `header${index + 1}.xml`);
-        relationships.appendChild(relationship);
-    });
-
-    // Add footer relationships
-    footers.forEach((_, index) => {
-        const relationship = xml.createElement("Relationship");
-        relationship.setAttribute("Id", `rIdFooter${index + 1}`);
-        relationship.setAttribute(
-            "Type",
-            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer"
-        );
-        relationship.setAttribute("Target", `footer${index + 1}.xml`);
-        relationships.appendChild(relationship);
-    });
-
     var startIndex = xmlString.indexOf("<Relationships");
-    xmlString = xmlString.replace(
-        xmlString.slice(startIndex),
-        serializer.serializeToString(relationships)
-    );
+    xmlString = xmlString.replace(xmlString.slice(startIndex), serializer.serializeToString(types));
 
     zip.file("word/_rels/document.xml.rels", xmlString);
 };

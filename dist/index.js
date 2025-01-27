@@ -100,10 +100,14 @@ function DocxMerger(options, files) {
 
         xml = xml.replace(xml.slice(startIndex, endIndex), this._body.join(''));
 
-        // Ensure the content types and relations are correctly updated for the final document
-        RelContentType.generateContentTypes(zip, this._contentTypes);
+        var headerFooterRefs = [];
+
+        self.insertHeadersAndFooters(headerFooterRefs); // Add references to this array
+
+        // Pass headerFooterRefs to generateContentTypes and generateRelations
+        RelContentType.generateContentTypes(zip, this._contentTypes, headerFooterRefs);
         Media.copyMediaFiles(zip, this._media, this._files);
-        RelContentType.generateRelations(zip, this._rel);
+        RelContentType.generateRelations(zip, this._rel, headerFooterRefs);
 
         // Generate headers and footers after content merging
         headersFooters.generateHeaders(zip, this._header);
