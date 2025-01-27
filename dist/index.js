@@ -78,6 +78,9 @@ function DocxMerger(options, files) {
             var content = xml.slice(bodyStartIndex, bodyEndIndex);
 
             var headerFooterRefs = headersFooters.extractHeadersFooters(zip, sectPr);
+
+            console.log("headerFooterRefs", headerFooterRefs); // Debugging line
+
             self.insertHeadersAndFooters(headerFooterRefs);
 
             self.insertRaw(content);
