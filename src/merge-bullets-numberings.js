@@ -1,92 +1,49 @@
-import { XMLSerializer, DOMParser } from '@xmldom/xmldom';
+import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 
-
-const prepareNumbering = function(files) {
-    const serializer = new XMLSerializer();
-
-    const prepare = files.map(async function(zip, index) {
-        const xmlBin = zip.file('word/numbering.xml');
-        if (!xmlBin) {
-            return;
-        }
-        let xmlString = await xmlBin.async('string');
+async function prepareNumbering(files, _numbering) {
+    const merge = files.map(async (zip) => {
+        let xmlString = await zip.file('word/numbering.xml').async('string');
         const xml = new DOMParser().parseFromString(xmlString, 'text/xml');
-        const nodes = xml.getElementsByTagName('w:abstractNum');
+        const childNodes = xml.documentElement.childNodes;
 
-        for (const node in nodes) {
-            if (/^\d+$/.test(node) && nodes[node].getAttribute) {
-                const absID = nodes[node].getAttribute('w:abstractNumId');
-                nodes[node].setAttribute('w:abstractNumId', absID + index);
-                const pStyles = nodes[node].getElementsByTagName('w:pStyle');
-                for (const pStyle in pStyles) {
-                    if (pStyles[pStyle].getAttribute) {
-                        const pStyleId = pStyles[pStyle].getAttribute('w:val');
-                        pStyles[pStyle].setAttribute('w:val', pStyleId + '_' + index);
-                    }
-                }
-                const numStyleLinks = nodes[node].getElementsByTagName('w:numStyleLink');
-                for (const numstyleLink in numStyleLinks) {
-                    if (numStyleLinks[numstyleLink].getAttribute) {
-                        const styleLinkId = numStyleLinks[numstyleLink].getAttribute('w:val');
-                        numStyleLinks[numstyleLink].setAttribute('w:val', styleLinkId + '_' + index);
-                    }
-                }
-
-                const styleLinks = nodes[node].getElementsByTagName('w:styleLink');
-                for (const styleLink in styleLinks) {
-                    if (styleLinks[styleLink].getAttribute) {
-                        const styleLinkId = styleLinks[styleLink].getAttribute('w:val');
-                        styleLinks[styleLink].setAttribute('w:val', styleLinkId + '_' + index);
-                    }
-                }
-
+        for (let node = 0; node < childNodes.length; node++) {
+            if (childNodes[node].nodeType === 1) { // Element node
+                const abstractNumId = childNodes[node].getAttribute('w:abstractNumId');
+                if (!_numbering[abstractNumId])
+                    _numbering[abstractNumId] = childNodes[node].cloneNode(true);
             }
         }
-
-        const numNodes = xml.getElementsByTagName('w:num');
-
-        for (const node in numNodes) {
-            if (/^\d+$/.test(node) && numNodes[node].getAttribute) {
-                const ID = numNodes[node].getAttribute('w:numId');
-                numNodes[node].setAttribute('w:numId', ID + index);
-                const absrefID = numNodes[node].getElementsByTagName('w:abstractNumId');
-                for (const i in absrefID) {
-                    if (absrefID[i].getAttribute) {
-                        const iId = absrefID[i].getAttribute('w:val');
-                        absrefID[i].setAttribute('w:val', iId + index);
-                    }
-                }
-
-
-            }
-        }
-
-        const startIndex = xmlString.indexOf("<w:numbering ");
-        xmlString = xmlString.replace(xmlString.slice(startIndex), serializer.serializeToString(xml.documentElement));
-
-        zip.file("word/numbering.xml", xmlString);
-    });
-    return Promise.all(prepare);
-};
-
-const mergeNumbering = function(files, _numbering) {
-    const merge = files.map(async function(zip) {
-        const xmlBin = zip.file('word/numbering.xml');
-        if (!xmlBin) {
-            return;
-        }
-        let xmlString = await xmlBin.async('string');
-        xmlString = xmlString.substring(xmlString.indexOf("<w:abstractNum "), xmlString.indexOf("</w:numbering"));
         _numbering.push(xmlString);
     });
     return Promise.all(merge);
-};
+}
 
-const generateNumbering = async function(zip, _numbering) {
-    const xmlBin = zip.file('word/numbering.xml');
+async function mergeNumbering(files, _numbering) {
+    const merge = files.map(async (zip) => {
+        let xmlString = await zip.file('word/numbering.xml').async('string');
+        const xml = new DOMParser().parseFromString(xmlString, 'text/xml');
+        const serializer = new XMLSerializer();
+
+        const numbering = xml.documentElement.cloneNode();
+
+        for (const node in _numbering) {
+            numbering.appendChild(_numbering[node]);
+        }
+
+        const startIndex = xmlString.indexOf('<w:numbering');
+        xmlString = xmlString.replace(xmlString.slice(startIndex), serializer.serializeToString(numbering));
+
+        zip.file('word/numbering.xml', xmlString);
+    });
+    return Promise.all(merge);
+}
+
+async function generateNumbering(zip, _numbering) {
+    let xmlBin = zip.file("word/numbering.xml");
     if (!xmlBin) {
-        return;
+        throw new Error('Numbering file not found in the zip');
     }
+
     let xmlString = await xmlBin.async('string');
     const startIndex = xmlString.indexOf("<w:abstractNum ");
     const endIndex = xmlString.indexOf("</w:numbering>");
@@ -94,11 +51,6 @@ const generateNumbering = async function(zip, _numbering) {
     xmlString = xmlString.replace(xmlString.slice(startIndex, endIndex), _numbering.join(''));
 
     zip.file("word/numbering.xml", xmlString);
-};
+}
 
-
-module.exports = {
-    prepareNumbering,
-    mergeNumbering,
-    generateNumbering
-};
+export { prepareNumbering, mergeNumbering, generateNumbering };

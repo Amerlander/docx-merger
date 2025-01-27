@@ -1,24 +1,17 @@
-import { XMLSerializer, DOMParser } from '@xmldom/xmldom';
+import JSZip from 'jszip';
+import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 
-const prepareMediaFiles = async function(files, media) {
-    let gCount = 1;
-    const prepare = files.map(async function(zip, index) {
-        const medFiles = zip.folder('word/media').files;
-        for (const mfile in medFiles) {
-            if (/^word\/media/.test(mfile) && mfile.length > 11) {
-                const count = gCount++;
-                media[count] = {};
-                media[count].oldTarget = mfile;
-                media[count].newTarget = mfile.replace(/[0-9]/, '_' + count).replace('word/', "");
-                media[count].fileIndex = index;
-                
-                await updateMediaRelations(zip, count, media);
-                await updateMediaContent(zip, count, media);
-            }
+async function prepareMediaFiles(files, media) {
+    for (const file of files) {
+        const zip = await new JSZip().loadAsync(file);
+        const mediaFiles = zip.folder('word/media');
+        if (mediaFiles) {
+            mediaFiles.forEach((relativePath, file) => {
+                media[relativePath] = file;
+            });
         }
-    });
-    return Promise.all(prepare);
-};
+    }
+}
 
 const updateMediaRelations = async function(zip, count, _media) {
     let xmlString = await zip.file('word/_rels/document.xml.rels').async('string');
@@ -31,9 +24,7 @@ const updateMediaRelations = async function(zip, count, _media) {
         if (/^\d+$/.test(node) && childNodes[node].getAttribute) {
             const target = childNodes[node].getAttribute('Target');
             if ('word/' + target === _media[count].oldTarget) {
-
                 _media[count].oldRelID = childNodes[node].getAttribute('Id');
-
                 childNodes[node].setAttribute('Target', _media[count].newTarget);
                 childNodes[node].setAttribute('Id', _media[count].oldRelID + '_' + count);
             }
@@ -52,16 +43,16 @@ const updateMediaContent = async function(zip, count, _media) {
     zip.file('word/document.xml', xmlString);
 };
 
-const copyMediaFiles = async function(base, _media, _files) {
-    for (const media in _media) {
-        const content = await _files[_media[media].fileIndex].file(_media[media].oldTarget).async('uint8array');
-        base.file('word/' + _media[media].newTarget, content);
+async function copyMediaFiles(zip, media, files) {
+    const mediaFolder = zip.folder('word/media');
+    if (!mediaFolder) {
+        throw new Error('Media folder not found in the zip');
     }
-};
 
-module.exports = {
-    prepareMediaFiles,
-    updateMediaRelations,
-    updateMediaContent,
-    copyMediaFiles
-};
+    for (const [relativePath, file] of Object.entries(media)) {
+        const content = await file.async('blob');
+        mediaFolder.file(relativePath, content);
+    }
+}
+
+export { prepareMediaFiles, updateMediaRelations, updateMediaContent, copyMediaFiles };

@@ -4,6 +4,13 @@ import Media from './merge-media.js';
 import RelContentType from './merge-relations-and-content-type.js';
 import bulletsNumbering from './merge-bullets-numberings.js';
 
+// Check if running in a browser environment
+const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+
+// Use the appropriate XML parser and serializer based on the environment
+const XMLSerializer = isBrowser ? window.XMLSerializer : require('@xmldom/xmldom').XMLSerializer;
+const DOMParser = isBrowser ? window.DOMParser : require('@xmldom/xmldom').DOMParser;
+
 class DocxMerger {
     constructor () {
         this._body = [];
@@ -44,6 +51,17 @@ class DocxMerger {
         this._builder.push(pb);
     }
 
+    insertSectionBreak() {
+        const sb = '<w:p> \
+                    <w:pPr> \
+                        <w:sectPr> \
+                            <w:type w:val="nextPage"/> \
+                        </w:sectPr> \
+                    </w:pPr> \
+                </w:p>';
+        this._builder.push(sb);
+    }
+
     insertRaw(xml) {
         this._builder.push(xml);
     }
@@ -63,8 +81,10 @@ class DocxMerger {
             xmlString = xmlString.substring(0, xmlString.indexOf('</w:body>'));
             xmlString = xmlString.substring(0, xmlString.lastIndexOf('<w:sectPr'));
             this.insertRaw(xmlString);
-            if (this._pageBreak && index < files.length-1)
-                this.insertPageBreak();
+            if (this._pageBreak && index < files.length-1){
+                this.insertSectionBreak();
+                // this.insertPageBreak();
+            }
         });
         return Promise.all(merge).then(() => {});
     }

@@ -1,5 +1,4 @@
-import { XMLSerializer, DOMParser } from '@xmldom/xmldom';
-
+import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 
 const mergeContentTypes = function(files, _contentTypes) {
     const merge = files.map(async (zip) => {
@@ -19,15 +18,14 @@ const mergeContentTypes = function(files, _contentTypes) {
     return Promise.all(merge);
 };
 
-const mergeRelations = function(files, _rel) {
+const mergeRelations = async function(files, _rel) {
     const merge = files.map(async (zip) => {
-        const xmlString = await zip.file('word/_rels/document.xml.rels').async('string');
+        let xmlString = await zip.file('word/_rels/document.xml.rels').async('string');
         const xml = new DOMParser().parseFromString(xmlString, 'text/xml');
+        const childNodes = xml.documentElement.childNodes;
 
-        const childNodes = xml.getElementsByTagName('Relationships')[0].childNodes;
-
-        for (const node in childNodes) {
-            if (/^\d+$/.test(node) && childNodes[node].getAttribute) {
+        for (let node = 0; node < childNodes.length; node++) {
+            if (childNodes[node].nodeType === 1) { // Element node
                 const Id = childNodes[node].getAttribute('Id');
                 if (!_rel[Id])
                     _rel[Id] = childNodes[node].cloneNode();
@@ -59,22 +57,16 @@ const generateRelations = async function(zip, _rel) {
     const xml = new DOMParser().parseFromString(xmlString, 'text/xml');
     const serializer = new XMLSerializer();
 
-    const types = xml.documentElement.cloneNode();
+    const rels = xml.documentElement.cloneNode();
 
     for (const node in _rel) {
-        types.appendChild(_rel[node]);
+        rels.appendChild(_rel[node]);
     }
 
     const startIndex = xmlString.indexOf('<Relationships');
-    xmlString = xmlString.replace(xmlString.slice(startIndex), serializer.serializeToString(types));
+    xmlString = xmlString.replace(xmlString.slice(startIndex), serializer.serializeToString(rels));
 
     zip.file('word/_rels/document.xml.rels', xmlString);
 };
 
-
-module.exports = {
-    mergeContentTypes,
-    mergeRelations,
-    generateContentTypes,
-    generateRelations
-};
+export { mergeContentTypes, mergeRelations, generateContentTypes, generateRelations };

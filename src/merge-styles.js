@@ -1,59 +1,38 @@
-import { XMLSerializer, DOMParser } from '@xmldom/xmldom';
+import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 
-const prepareStyles = function(files, style) {
-    const serializer = new XMLSerializer();
-
-    const prepare = files.map(async function(zip, index) {
+const prepareStyles = async function(files, _style) {
+    const merge = files.map(async (zip) => {
         let xmlString = await zip.file('word/styles.xml').async('string');
-        let xml = new DOMParser().parseFromString(xmlString, 'text/xml');
-        const nodes = xml.getElementsByTagName('w:style');
+        const xml = new DOMParser().parseFromString(xmlString, 'text/xml');
+        const childNodes = xml.documentElement.childNodes;
 
-        for (const node in nodes) {
-            if (/^\d+$/.test(node) && nodes[node].getAttribute) {
-                const styleId = nodes[node].getAttribute('w:styleId');
-                nodes[node].setAttribute('w:styleId', styleId + '_' + index);
-                const basedonStyle = nodes[node].getElementsByTagName('w:basedOn')[0];
-                if (basedonStyle) {
-                    const basedonStyleId = basedonStyle.getAttribute('w:val');
-                    basedonStyle.setAttribute('w:val', basedonStyleId + '_' + index);
-                }
-
-                const w_next = nodes[node].getElementsByTagName('w:next')[0];
-                if (w_next) {
-                    const w_next_ID = w_next.getAttribute('w:val');
-                    w_next.setAttribute('w:val', w_next_ID + '_' + index);
-                }
-
-                const w_link = nodes[node].getElementsByTagName('w:link')[0];
-                if (w_link) {
-                    const w_link_ID = w_link.getAttribute('w:val');
-                    w_link.setAttribute('w:val', w_link_ID + '_' + index);
-                }
-
-                const numId = nodes[node].getElementsByTagName('w:numId')[0];
-                if (numId) {
-                    const numId_ID = numId.getAttribute('w:val');
-                    numId.setAttribute('w:val', numId_ID + index);
-                }
-
-                await updateStyleRel_Content(zip, index, styleId);
+        for (let node = 0; node < childNodes.length; node++) {
+            if (childNodes[node].nodeType === 1) { // Element node
+                const styleId = childNodes[node].getAttribute('w:styleId');
+                if (!_style[styleId])
+                    _style[styleId] = childNodes[node].cloneNode(true);
             }
         }
-
-        const startIndex = xmlString.indexOf('<w:styles ');
-        xmlString = xmlString.replace(xmlString.slice(startIndex), serializer.serializeToString(xml.documentElement));
-
-        zip.file('word/styles.xml', xmlString);
     });
-
-    return Promise.all(prepare);
+    return Promise.all(merge);
 };
 
-const mergeStyles = async function(files, _styles) {
-    const merge = files.map(async function(zip) {
+const mergeStyles = async function(files, _style) {
+    const merge = files.map(async (zip) => {
         let xmlString = await zip.file('word/styles.xml').async('string');
-        xmlString = xmlString.substring(xmlString.indexOf('<w:style '), xmlString.indexOf('</w:styles'));
-        _styles.push(xmlString);
+        const xml = new DOMParser().parseFromString(xmlString, 'text/xml');
+        const serializer = new XMLSerializer();
+
+        const styles = xml.documentElement.cloneNode();
+
+        for (const node in _style) {
+            styles.appendChild(_style[node]);
+        }
+
+        const startIndex = xmlString.indexOf('<w:styles');
+        xmlString = xmlString.replace(xmlString.slice(startIndex), serializer.serializeToString(styles));
+
+        zip.file('word/styles.xml', xmlString);
     });
     return Promise.all(merge);
 };
@@ -74,9 +53,4 @@ const generateStyles = async function(zip, _style) {
     zip.file('word/styles.xml', xmlString);
 };
 
-module.exports = {
-    mergeStyles,
-    prepareStyles,
-    updateStyleRel_Content,
-    generateStyles
-};
+export { prepareStyles, mergeStyles, updateStyleRel_Content, generateStyles };
