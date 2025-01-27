@@ -3,20 +3,17 @@ var XMLSerializer = require('xmldom').XMLSerializer;
 
 module.exports = {
     /**
-    * Extract header and footer references from section properties (<w:sectPr>)
-    * @param {JSZip} zip - The zip object of the Word document
-    * @param {string} sectPr - The section properties XML
-    * @returns {Array} An array of header and footer references
-    */
+     * Extract header and footer references from section properties (<w:sectPr>)
+     * @param {JSZip} zip - The zip object of the Word document
+     * @param {string} sectPr - The section properties XML
+     * @returns {Array} An array of header and footer references
+     */
     extractHeadersFooters: function (zip, sectPr) {
         var headerFooterRefs = [];
 
         // Parse the document.xml to find the section properties (<w:sectPr>) correctly
         var xmlString = zip.file("word/document.xml").asText();
         var xmlDoc = new DOMParser().parseFromString(xmlString, 'text/xml');
-
-        // Debugging: Output the whole xmlString to see if it contains the right data
-        console.log("document.xml:", xmlString);
 
         // Find the position of <w:sectPr> in the XML (start and end)
         var sectPrStartIndex = xmlString.indexOf('<w:sectPr');
@@ -37,13 +34,10 @@ module.exports = {
         var sectDoc = new DOMParser().parseFromString(sectPrXML, 'text/xml');
 
         // Debugging: Output the section properties XML to check the structure
-        console.log("sectPrXML:", sectPrXML);
+        console.log("sectPrXML:", sectPrXML, sectDoc);
 
-        // Check if the parsed document contains the required namespaces
-        var namespaceURI = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-
-        // Find the header reference (<w:headerReference>) with namespace
-        var headerRef = sectDoc.getElementsByTagNameNS(namespaceURI, 'headerReference');
+        // Find the header reference (<w:headerReference>)
+        var headerRef = sectDoc.getElementsByTagName('w:headerReference');
         if (headerRef.length > 0) {
             // Log header reference if found
             console.log("Header Reference Found:", headerRef[0].outerHTML);
@@ -53,8 +47,8 @@ module.exports = {
             });
         }
 
-        // Find the footer reference (<w:footerReference>) with namespace
-        var footerRef = sectDoc.getElementsByTagNameNS(namespaceURI, 'footerReference');
+        // Find the footer reference (<w:footerReference>)
+        var footerRef = sectDoc.getElementsByTagName('w:footerReference');
         if (footerRef.length > 0) {
             // Log footer reference if found
             console.log("Footer Reference Found:", footerRef[0].outerHTML);
@@ -63,6 +57,8 @@ module.exports = {
                 xml: footerRef[0].outerHTML
             });
         }
+
+        console.log('REFS', headerFooterRefs);
 
         return headerFooterRefs;
     },
