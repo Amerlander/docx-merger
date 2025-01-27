@@ -1,5 +1,4 @@
-const {XMLSerializer} = require('@xmldom/xmldom');
-const {DOMParser} = require('@xmldom/xmldom');
+import { XMLSerializer, DOMParser } from '@xmldom/xmldom';
 
 const prepareStyles = function(files, style) {
     const serializer = new XMLSerializer();
@@ -76,8 +75,8 @@ const generateStyles = async function(zip, _style) {
 };
 
 module.exports = {
-    mergeStyles: mergeStyles,
-    prepareStyles: prepareStyles,
-    updateStyleRel_Content: updateStyleRel_Content,
-    generateStyles: generateStyles
+    mergeStyles,
+    prepareStyles,
+    updateStyleRel_Content,
+    generateStyles
 };

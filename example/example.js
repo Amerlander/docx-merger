@@ -1,7 +1,7 @@
-const DocxMerger = require('./../src/index');
+import DocxMerger from './../src/index';
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
 
 (async () => {
     const file1 = fs.readFileSync(path.resolve(__dirname, 'template-0.docx'), 'binary');

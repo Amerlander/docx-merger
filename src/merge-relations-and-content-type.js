@@ -1,5 +1,4 @@
-const {XMLSerializer} = require('@xmldom/xmldom');
-const {DOMParser} = require('@xmldom/xmldom');
+import { XMLSerializer, DOMParser } from '@xmldom/xmldom';
 
 
 const mergeContentTypes = function(files, _contentTypes) {
@@ -74,8 +73,8 @@ const generateRelations = async function(zip, _rel) {
 
 
 module.exports = {
-    mergeContentTypes: mergeContentTypes,
-    mergeRelations: mergeRelations,
-    generateContentTypes: generateContentTypes,
-    generateRelations: generateRelations
+    mergeContentTypes,
+    mergeRelations,
+    generateContentTypes,
+    generateRelations
 };

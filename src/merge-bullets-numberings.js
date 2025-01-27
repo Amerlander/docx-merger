@@ -1,5 +1,4 @@
-const {XMLSerializer} = require('@xmldom/xmldom');
-const {DOMParser} = require('@xmldom/xmldom');
+import { XMLSerializer, DOMParser } from '@xmldom/xmldom';
 
 
 const prepareNumbering = function(files) {
@@ -99,7 +98,7 @@ const generateNumbering = async function(zip, _numbering) {
 
 
 module.exports = {
-    prepareNumbering: prepareNumbering,
-    mergeNumbering: mergeNumbering,
-    generateNumbering: generateNumbering
+    prepareNumbering,
+    mergeNumbering,
+    generateNumbering
 };

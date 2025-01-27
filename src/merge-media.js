@@ -1,5 +1,4 @@
-const {XMLSerializer} = require('@xmldom/xmldom');
-const {DOMParser} = require('@xmldom/xmldom');
+import { XMLSerializer, DOMParser } from '@xmldom/xmldom';
 
 const prepareMediaFiles = async function(files, media) {
     let gCount = 1;
@@ -61,8 +60,8 @@ const copyMediaFiles = async function(base, _media, _files) {
 };
 
 module.exports = {
-    prepareMediaFiles: prepareMediaFiles,
-    updateMediaRelations: updateMediaRelations,
-    updateMediaContent: updateMediaContent,
-    copyMediaFiles: copyMediaFiles
+    prepareMediaFiles,
+    updateMediaRelations,
+    updateMediaContent,
+    copyMediaFiles
 };
