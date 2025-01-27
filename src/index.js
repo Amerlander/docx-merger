@@ -1,4 +1,4 @@
-importh JSZip frome 'jszip'; 
+import JSZip from 'jszip'; 
 import * as Style from './merge-styles.js';
 import * as Media from './merge-media.js';
 import * as RelContentType from './merge-relations-and-content-type.js';
