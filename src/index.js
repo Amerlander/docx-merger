@@ -59,41 +59,41 @@ function DocxMerger(options, files) {
     
         var sectPr;
         files.forEach(function(zip, index) {
+            var xml = zip.file("word/document.xml").asText();
+            var bodyStart = xml.indexOf("<w:body>");
+            var bodyEnd = xml.indexOf("</w:body>", bodyStart);
+            var bodyContent = xml.substring(bodyStart + 8, bodyEnd);
+    
+            // Remove the existing sectPr from the body content
+            var sectPrIndex = bodyContent.lastIndexOf("<w:sectPr");
+            if (sectPrIndex !== -1) {
+                bodyContent = bodyContent.substring(0, sectPrIndex);
+            }
+    
+            self.insertRaw(bodyContent);
+    
             if (index === 0) {
-                // Use the first file as the base document
                 self._baseZip = zip;
-
-                // Extract the first sectPr from the first file
-                var xml = zip.file("word/document.xml").asText();
+    
+                // Extract sectPr from the original document.xml of the first file
                 var sectPrStartIndex = xml.lastIndexOf("<w:sectPr");
                 if (sectPrStartIndex !== -1) {
                     var sectPrEndIndex = xml.indexOf("</w:sectPr>", sectPrStartIndex);
                     if (sectPrEndIndex !== -1) {
-                        sectPrEndIndex += 11; // Adjust to include the length of the end tag
-                        sectPr = xml.slice(sectPrStartIndex, sectPrEndIndex);
+                        sectPrEndIndex += "</w:sectPr>".length;
+                        sectPr = xml.substring(sectPrStartIndex, sectPrEndIndex);
                     }
                 }
-            } 
-            // else {
-            var xml = zip.file("word/document.xml").asText();
-            xml = xml.substring(xml.indexOf("<w:body>") + 8);
-            xml = xml.substring(0, xml.indexOf("</w:body>"));
-            xml = xml.substring(0, xml.lastIndexOf("<w:sectPr"));
-
-            self.insertRaw(xml);
-
-                        // Insert a section break or page break after each file
-            if (self._pageBreak && index < files.length - 1) {
-                if (sectPr) {
-                    self.insertRaw('<w:p><w:pPr>' + sectPr + '</w:pPr></w:p>');
-                } else {
-                    self.insertPageBreak();
+            } else {
+                // Insert a section break or page break after each file except the last one
+                if (self._pageBreak && index < files.length - 1) {
+                    if (sectPr) {
+                        self.insertRaw('<w:p><w:pPr>' + sectPr + '</w:pPr></w:p>');
+                    } else {
+                        self.insertPageBreak();
+                    }
                 }
             }
-
-            // }
-
-
         });
     };
 
