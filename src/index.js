@@ -7,6 +7,64 @@ var Media = require('./merge-media');
 var RelContentType = require('./merge-relations-and-content-type');
 var bulletsNumbering = require('./merge-bullets-numberings');
 
+const sectionTypeMap = {
+    'section-continuous': 'continuous',
+    'section-newpage': 'nextPage',
+    'section-evenpage': 'evenPage',
+    'section-oddpage': 'oddPage'
+};
+
+function extractSectionProperties(xml) {
+    var sectPrStartIndex = xml.lastIndexOf('<w:sectPr');
+
+    if (sectPrStartIndex === -1) {
+        return null;
+    }
+
+    var sectPrEndIndex = xml.indexOf('</w:sectPr>', sectPrStartIndex);
+
+    if (sectPrEndIndex === -1) {
+        return null;
+    }
+
+    sectPrEndIndex += 11;
+    return xml.slice(sectPrStartIndex, sectPrEndIndex);
+}
+
+function wrapSectionProperties(sectPr) {
+    return '<w:p><w:pPr>' + sectPr + '</w:pPr></w:p>';
+}
+
+function setSectionType(sectPr, type) {
+    var baseSectPr = sectPr || '<w:sectPr/>';
+
+    if (baseSectPr.endsWith('/>')) {
+        baseSectPr = baseSectPr.slice(0, -2) + '></w:sectPr>';
+    }
+
+    if (/<w:type\b[^>]*w:val="[^"]*"\s*\/>/.test(baseSectPr)) {
+        return baseSectPr.replace(/<w:type\b([^>]*)w:val="[^"]*"([^>]*)\/>/, '<w:type$1w:val="' + type + '"$2/>');
+    }
+
+    if (/<w:type\b[^>]*>.*?<\/w:type>/.test(baseSectPr)) {
+        return baseSectPr.replace(/<w:type\b[^>]*>.*?<\/w:type>/, '<w:type w:val="' + type + '"/>');
+    }
+
+    return baseSectPr.replace('</w:sectPr>', '<w:type w:val="' + type + '"/></w:sectPr>');
+}
+
+function resolveBreakMode(options) {
+    if (options && options.breakMode) {
+        return options.breakMode;
+    }
+
+    if (options && typeof options.pageBreak !== 'undefined') {
+        return options.pageBreak ? 'template' : 'none';
+    }
+
+    return 'template';
+}
+
 function DocxMerger(options, files) {
 
     this._body = [];
@@ -14,6 +72,7 @@ function DocxMerger(options, files) {
     this._style = [];
     this._numbering = [];
     this._pageBreak = typeof options.pageBreak !== 'undefined' ? !!options.pageBreak : true;
+    this._breakMode = resolveBreakMode(options);
     this._files = [];
     var self = this;
     (files || []).forEach(function(file) {
@@ -57,43 +116,56 @@ function DocxMerger(options, files) {
         Style.prepareStyles(files, this._style);
         Style.mergeStyles(files, this._style);
     
-        var sectPr;
         files.forEach(function(zip, index) {
-            if (index === 0) {
-                // Use the first file as the base document
-                self._baseZip = zip;
+            var xml = zip.file('word/document.xml').asText();
+            var sectPr = extractSectionProperties(xml);
 
-                // Extract the first sectPr from the first file
-                var xml = zip.file("word/document.xml").asText();
-                var sectPrStartIndex = xml.lastIndexOf("<w:sectPr");
-                if (sectPrStartIndex !== -1) {
-                    var sectPrEndIndex = xml.indexOf("</w:sectPr>", sectPrStartIndex);
-                    if (sectPrEndIndex !== -1) {
-                        sectPrEndIndex += 11; // Adjust to include the length of the end tag
-                        sectPr = xml.slice(sectPrStartIndex, sectPrEndIndex);
-                    }
-                }
-            } 
-            // else {
-            var xml = zip.file("word/document.xml").asText();
+            if (index === 0) {
+                self._baseZip = zip;
+            }
+
+            if (sectPr) {
+                self._finalSectPr = sectPr;
+            }
+
             xml = xml.substring(xml.indexOf("<w:body>") + 8);
             xml = xml.substring(0, xml.indexOf("</w:body>"));
-            xml = xml.substring(0, xml.lastIndexOf("<w:sectPr"));
+
+            var sectPrIndex = xml.lastIndexOf('<w:sectPr');
+            if (sectPrIndex !== -1) {
+                xml = xml.substring(0, sectPrIndex);
+            }
 
             self.insertRaw(xml);
 
-                        // Insert a section break or page break after each file
-            if (self._pageBreak && index < files.length - 1) {
-                if (sectPr) {
-                    self.insertRaw('<w:p><w:pPr>' + sectPr + '</w:pPr></w:p>');
-                } else {
-                    self.insertPageBreak();
+            if (index < files.length - 1) {
+                switch (self._breakMode) {
+                    case 'template':
+                        if (sectPr) {
+                            self.insertRaw(wrapSectionProperties(sectPr));
+                        } else {
+                            self.insertPageBreak();
+                        }
+                        break;
+                    case 'none':
+                        break;
+                    case 'section-continuous':
+                    case 'section-newpage':
+                    case 'section-evenpage':
+                    case 'section-oddpage':
+                        self.insertRaw(wrapSectionProperties(setSectionType(sectPr, sectionTypeMap[self._breakMode])));
+                        break;
+                    case 'pagebreak':
+                        self.insertPageBreak();
+                        break;
+                    default:
+                        if (sectPr) {
+                            self.insertRaw(wrapSectionProperties(sectPr));
+                        } else {
+                            self.insertPageBreak();
+                        }
                 }
             }
-
-            // }
-
-
         });
     };
 
@@ -105,6 +177,17 @@ function DocxMerger(options, files) {
         var endIndex = xml.lastIndexOf("<w:sectPr");
     
         xml = xml.replace(xml.slice(startIndex, endIndex), this._body.join(''));
+
+        if (this._finalSectPr) {
+            var finalSectPrStart = xml.lastIndexOf('<w:sectPr');
+            if (finalSectPrStart !== -1) {
+                var finalSectPrEnd = xml.indexOf('</w:sectPr>', finalSectPrStart);
+                if (finalSectPrEnd !== -1) {
+                    finalSectPrEnd += 11;
+                    xml = xml.slice(0, finalSectPrStart) + this._finalSectPr + xml.slice(finalSectPrEnd);
+                }
+            }
+        }
     
         RelContentType.generateContentTypes(zip, this._contentTypes);
         Media.copyMediaFiles(zip, this._media, this._files);
