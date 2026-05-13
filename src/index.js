@@ -148,28 +148,24 @@ function listRelsFiles(zip) {
     return out;
 }
 
-// Best-effort byte equality check: lengths plus three 64-byte samples (head,
-// middle, tail). Designed for media files (JPEG/PNG/etc.) where collisions
-// across this signature are astronomically unlikely. Avoids the ~10x cost of
-// comparing entire 1MB+ binaries when many files share a template-baked logo.
-function looksIdentical(zipA, pathA, zipB, pathB) {
-    var binA = zipA && zipA.file ? zipA.file(pathA) : null;
-    var binB = zipB && zipB.file ? zipB.file(pathB) : null;
-    if (!binA || !binB) return false;
-    var a = binA.asUint8Array();
-    var b = binB.asUint8Array();
-    if (a.length !== b.length) return false;
-    var len = a.length;
-    if (len === 0) return true;
+// Compact content signature for a media file: length plus a djb2 hash over
+// three 64-byte windows (head/middle/tail). Designed for media files where
+// collisions across this signature are astronomically unlikely. ~190 bytes of
+// hashing per file instead of comparing 100KB–1MB binaries in full.
+function mediaSignature(bin) {
+    var bytes = bin.asUint8Array();
+    var len = bytes.length;
+    if (len === 0) return '0:0';
+    var h = 5381;
     var sampleStarts = [0, Math.floor(len / 2), Math.max(0, len - 64)];
     for (var s = 0; s < sampleStarts.length; s++) {
         var start = sampleStarts[s];
         var end = Math.min(start + 64, len);
         for (var i = start; i < end; i++) {
-            if (a[i] !== b[i]) return false;
+            h = ((h << 5) + h + bytes[i]) | 0;
         }
     }
-    return true;
+    return len + ':' + (h >>> 0).toString(16);
 }
 
 function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
@@ -204,101 +200,144 @@ function applyRIdMap(xml, map) {
 // document.xml.rels (so they don't collide with other files' rIds after merge)
 // and update document.xml's rId references accordingly.
 //
+// `mediaIndex` is mutable cross-file state mapping a content signature →
+// canonical absolute path in the merged output. Media files whose signature
+// already exists in the index are de-duplicated: their `Target` attributes are
+// remapped to the canonical path, and the local file isn't copied to the base.
+// This handles both template-baked logos (identical across every render) and
+// generated images that happen to share content across renders.
+//
 // Returns the file's content-type defaults + overrides keyed by post-rename
 // PartName so the caller can merge them across files.
-function prepareFile(zip, index, baseZip) {
+function prepareFile(zip, index, mediaIndex) {
     var suffix = index === 0 ? '' : '_f' + index;
     var serializer = new XMLSerializer();
-    var pathRenameMap = {}; // oldAbsolutePath -> newAbsolutePath
+    var pathRenameMap = {}; // resolved oldPath -> new path (file moves to new path, gets copied to base)
+    var pathRemapMap = {};  // resolved oldPath -> canonical path elsewhere (file is *not* copied; Target attribute is redirected)
 
-    if (suffix) {
-        // 1. Scan every rels file for per-file targets. Skip the rename when
-        //    the file is byte-identical to the same path in the base zip —
-        //    that's the common case for template-baked media (logos etc.) and
-        //    avoids N-fold duplication in the merged output.
-        var relsFiles = listRelsFiles(zip);
-        relsFiles.forEach(function (relsPath) {
-            var bin = zip.file(relsPath);
-            if (!bin) return;
-            var xmlString = bin.asText();
-            var dom = new DOMParser().parseFromString(xmlString, 'text/xml');
-            var rels = dom.getElementsByTagName('Relationship');
-            for (var i = 0; i < rels.length; i++) {
-                var rel = rels[i];
-                if (!rel.getAttribute) continue;
-                var target = rel.getAttribute('Target');
-                var targetMode = rel.getAttribute('TargetMode');
-                if (!target || targetMode === 'External') continue;
-                var resolved = resolveTarget(relsPath, target);
-                if (!isPerFilePart(resolved) || pathRenameMap[resolved]) continue;
-                if (looksIdentical(zip, resolved, baseZip, resolved)) continue;
-                pathRenameMap[resolved] = suffixPath(resolved, suffix);
-            }
-        });
+    // Pre-register base file's media under their original paths so subsequent
+    // files can deduplicate against them without renaming.
+    if (index === 0) {
+        for (var p in zip.files) {
+            if (!Object.prototype.hasOwnProperty.call(zip.files, p)) continue;
+            if (zip.files[p].dir) continue;
+            if (!/^word\/media\//.test(p)) continue;
+            var b0 = zip.file(p);
+            if (!b0) continue;
+            var sig0 = mediaSignature(b0);
+            if (!mediaIndex[sig0]) mediaIndex[sig0] = p;
+        }
+        return collectContentTypes(zip, {});
+    }
 
-        // 2. Rewrite Target attributes in every rels file (resolved → renamed).
-        relsFiles.forEach(function (relsPath) {
-            var bin = zip.file(relsPath);
-            if (!bin) return;
-            var xmlString = bin.asText();
-            var dom = new DOMParser().parseFromString(xmlString, 'text/xml');
-            var rels = dom.getElementsByTagName('Relationship');
-            var changed = false;
-            for (var i = 0; i < rels.length; i++) {
-                var rel = rels[i];
-                if (!rel.getAttribute) continue;
-                var target = rel.getAttribute('Target');
-                var targetMode = rel.getAttribute('TargetMode');
-                if (!target || targetMode === 'External') continue;
-                var resolved = resolveTarget(relsPath, target);
-                if (pathRenameMap[resolved]) {
-                    rel.setAttribute('Target', makeRelativeTarget(relsPath, pathRenameMap[resolved]));
-                    changed = true;
+    // 1. Scan rels for per-file targets. For media, consult `mediaIndex` to
+    //    dedupe against any previously processed file (base or another render).
+    var relsFiles = listRelsFiles(zip);
+    relsFiles.forEach(function (relsPath) {
+        var bin = zip.file(relsPath);
+        if (!bin) return;
+        var xmlString = bin.asText();
+        var dom = new DOMParser().parseFromString(xmlString, 'text/xml');
+        var rels = dom.getElementsByTagName('Relationship');
+        for (var i = 0; i < rels.length; i++) {
+            var rel = rels[i];
+            if (!rel.getAttribute) continue;
+            var target = rel.getAttribute('Target');
+            var targetMode = rel.getAttribute('TargetMode');
+            if (!target || targetMode === 'External') continue;
+            var resolved = resolveTarget(relsPath, target);
+            if (!isPerFilePart(resolved)) continue;
+            if (pathRenameMap[resolved] || pathRemapMap[resolved]) continue;
+
+            if (/^word\/media\//.test(resolved)) {
+                var mediaBin = zip.file(resolved);
+                if (mediaBin) {
+                    var sig = mediaSignature(mediaBin);
+                    if (mediaIndex[sig]) {
+                        pathRemapMap[resolved] = mediaIndex[sig];
+                        continue;
+                    }
+                    var newPath = suffixPath(resolved, suffix);
+                    mediaIndex[sig] = newPath;
+                    pathRenameMap[resolved] = newPath;
+                    continue;
                 }
             }
-            if (changed) {
-                var start = xmlString.indexOf('<Relationships');
-                var rewritten = start >= 0
-                    ? xmlString.slice(0, start) + serializer.serializeToString(dom.documentElement)
-                    : serializer.serializeToString(dom.documentElement);
-                zip.file(relsPath, rewritten);
-            }
-        });
 
-        // 3. Suffix rIds in the main document rels and update document.xml.
-        var rIdMap = suffixMainRelsIds(zip, suffix, serializer);
-        if (Object.keys(rIdMap).length > 0) {
-            var docXml = zip.file('word/document.xml').asText();
-            zip.file('word/document.xml', applyRIdMap(docXml, rIdMap));
+            pathRenameMap[resolved] = suffixPath(resolved, suffix);
+        }
+    });
+
+    // 2. Rewrite Target attributes in every rels file. `pathRenameMap` points
+    //    at the suffixed local path; `pathRemapMap` points at a canonical path
+    //    that already exists in the merged output.
+    relsFiles.forEach(function (relsPath) {
+        var bin = zip.file(relsPath);
+        if (!bin) return;
+        var xmlString = bin.asText();
+        var dom = new DOMParser().parseFromString(xmlString, 'text/xml');
+        var rels = dom.getElementsByTagName('Relationship');
+        var changed = false;
+        for (var i = 0; i < rels.length; i++) {
+            var rel = rels[i];
+            if (!rel.getAttribute) continue;
+            var target = rel.getAttribute('Target');
+            var targetMode = rel.getAttribute('TargetMode');
+            if (!target || targetMode === 'External') continue;
+            var resolved = resolveTarget(relsPath, target);
+            var canonical = pathRenameMap[resolved] || pathRemapMap[resolved];
+            if (canonical && canonical !== resolved) {
+                rel.setAttribute('Target', makeRelativeTarget(relsPath, canonical));
+                changed = true;
+            }
+        }
+        if (changed) {
+            var start = xmlString.indexOf('<Relationships');
+            var rewritten = start >= 0
+                ? xmlString.slice(0, start) + serializer.serializeToString(dom.documentElement)
+                : serializer.serializeToString(dom.documentElement);
+            zip.file(relsPath, rewritten);
+        }
+    });
+
+    // 3. Suffix rIds in the main document rels and update document.xml.
+    var rIdMap = suffixMainRelsIds(zip, suffix, serializer);
+    if (Object.keys(rIdMap).length > 0) {
+        var docXml = zip.file('word/document.xml').asText();
+        zip.file('word/document.xml', applyRIdMap(docXml, rIdMap));
+    }
+
+    // 4. Move the actually-renamed part bytes (and their rels) to new paths.
+    Object.keys(pathRenameMap).forEach(function (oldPath) {
+        var newPath = pathRenameMap[oldPath];
+        if (newPath === oldPath) return;
+
+        var bin = zip.file(oldPath);
+        if (bin) {
+            var isXml = /\.(xml|rels)$/i.test(oldPath);
+            if (isXml) {
+                zip.file(newPath, bin.asText());
+            } else {
+                zip.file(newPath, bin.asUint8Array());
+            }
+            zip.remove(oldPath);
         }
 
-        // 4. Move the actual part bytes (and their rels file) to the new paths.
-        Object.keys(pathRenameMap).forEach(function (oldPath) {
-            var newPath = pathRenameMap[oldPath];
-            if (newPath === oldPath) return;
-
-            var bin = zip.file(oldPath);
-            if (bin) {
-                var isXml = /\.(xml|rels)$/i.test(oldPath);
-                if (isXml) {
-                    zip.file(newPath, bin.asText());
-                } else {
-                    zip.file(newPath, bin.asUint8Array());
-                }
-                zip.remove(oldPath);
+        var oldRelsPath = partToRelsPath(oldPath);
+        var newRelsPath = partToRelsPath(newPath);
+        if (oldRelsPath !== newRelsPath) {
+            var relsBin = zip.file(oldRelsPath);
+            if (relsBin) {
+                zip.file(newRelsPath, relsBin.asText());
+                zip.remove(oldRelsPath);
             }
+        }
+    });
 
-            var oldRelsPath = partToRelsPath(oldPath);
-            var newRelsPath = partToRelsPath(newPath);
-            if (oldRelsPath !== newRelsPath) {
-                var relsBin = zip.file(oldRelsPath);
-                if (relsBin) {
-                    zip.file(newRelsPath, relsBin.asText());
-                    zip.remove(oldRelsPath);
-                }
-            }
-        });
-    }
+    // 5. Drop deduplicated media so copyAuxiliaryParts won't ship them.
+    Object.keys(pathRemapMap).forEach(function (oldPath) {
+        zip.remove(oldPath);
+    });
 
     return collectContentTypes(zip, pathRenameMap);
 }
@@ -401,10 +440,11 @@ function DocxMerger(options, files) {
         var self = this;
         this._builder = this._body;
 
-        // Phase 1 — prep each file (renames, rId suffixing, content types).
-        var baseZip = files[0];
+        // Phase 1 — prep each file (renames, rId suffixing, content types,
+        // cross-file media dedup).
+        var mediaIndex = {};
         files.forEach(function (zip, index) {
-            var ct = prepareFile(zip, index, baseZip);
+            var ct = prepareFile(zip, index, mediaIndex);
             Object.keys(ct.defaults).forEach(function (ext) {
                 if (!self._contentTypeDefaults[ext]) {
                     self._contentTypeDefaults[ext] = ct.defaults[ext];
